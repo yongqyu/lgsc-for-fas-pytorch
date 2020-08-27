@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 
@@ -134,13 +135,11 @@ class LightningModel(pl.LightningModule):
 
     def train_dataloader(self):
         transforms = get_train_augmentations(self.hparams.image_size)
-        df = pd.read_csv(self.hparams.train_df)
-        try:
-            face_detector = self.hparams.face_detector
-        except AttributeError:
-            face_detector = None
+        total_frames = [self.hparams.train_root+sub_dir+'/'+x
+                                           for sub_dir in os.listdir(self.hparams.train_root)
+                                           for x in os.listdir(self.hparams.train_root+sub_dir)]
         dataset = Dataset(
-            df, self.hparams.path_root, transforms, face_detector=face_detector
+            total_frames, self.hparams.train_root, transforms, anti_word='anti'
         )
         if self.hparams.use_balance_sampler:
             labels = list(df.target.values)
@@ -160,18 +159,14 @@ class LightningModel(pl.LightningModule):
 
     def val_dataloader(self):
         transforms = get_test_augmentations(self.hparams.image_size)
-        df = pd.read_csv(self.hparams.val_df)
-        try:
-            face_detector = self.hparams.face_detector
-        except AttributeError:
-            face_detector = None
+        total_frames = [self.hparams.val_root+x for x in os.listdir(self.hparams.val_root)]
         dataset = Dataset(
-            df, self.hparams.path_root, transforms, face_detector=face_detector
+            total_frames, self.hparams.val_root, transforms, anti_word='spoof'
         )
         dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=self.hparams.batch_size,
             num_workers=self.hparams.num_workers_val,
-            shuffle=False,
+            shuffle=True,
         )
         return dataloader

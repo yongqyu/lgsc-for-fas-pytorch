@@ -5,7 +5,7 @@ from PIL import Image
 import torch
 import logging
 
-from facenet_pytorch import MTCNN
+# from facenet_pytorch import MTCNN
 import albumentations as A
 from albumentations.pytorch import ToTensorV2 as ToTensor
 
@@ -38,58 +38,34 @@ def get_test_augmentations(image_size: int = 224):
 class Dataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        df: "pd.DataFrame",
+        total_frames,
         root: str,
         transforms: Callable,
-        face_detector: dict = None,
         with_labels: bool = True,
+        anti_word: str = None,
+        real_word: str = None,
     ):
-        self.df = df
         self.root = root
         self.transforms = transforms
         self.with_labels = with_labels
-        self.face_extractor = None
-        if face_detector is not None:
-            face_detector["keep_all"] = True
-            face_detector["post_process"] = False
-            self.face_extractor = MTCNN(**face_detector)
+
+        self.anti_word = anti_word
+        self.real_word = real_word
+        self.total_frames = total_frames
 
     def __len__(self):
-        return len(self.df)
+        return len(self.total_frames)
 
-    def __getitem__(self, item: int):
-        path = os.path.join(self.root, self.df.iloc[item].path)
-        file = np.random.choice(os.listdir(path))
-        full_path = os.path.join(path, file)
+    def __getitem__(self, idx: int):
+        full_path = self.total_frames[idx]
 
         image = Image.open(full_path)
-        if self.with_labels:
-            target = self.df.iloc[item].target
+        if self.anti_word != None:
+            target = 1 if self.anti_word in full_path else 0
+        elif self.real_word != None:
+            target = 0 if self.rea_word in full_path else 1
 
-        if self.face_extractor is not None:
-            faces, probs = self.face_extractor(image, return_prob=True)
-            if faces is None:
-                logging.warning(f"{full_path} doesn't containt any face!")
-                image = self.transforms(image=np.array(image))["image"]
-                if self.with_labels:
-                    return image, target
-                else:
-                    return image
-            if faces.shape[0] != 1:
-                logging.warning(
-                    f"{full_path} - {faces.shape[0]} faces detected"
-                )
-                face = (
-                    faces[np.argmax(probs)]
-                    .numpy()
-                    .astype(np.uint8)
-                    .transpose(1, 2, 0)
-                )
-            else:
-                face = faces[0].numpy().astype(np.uint8).transpose(1, 2, 0)
-            image = self.transforms(image=face)["image"]
-        else:
-            image = self.transforms(image=np.array(image))["image"]
+        image = self.transforms(image=np.array(image))["image"]
 
         if self.with_labels:
             return image, target

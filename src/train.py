@@ -19,5 +19,6 @@ if __name__ == "__main__":
         fast_dev_run=False,
         early_stop_callback=True,
         default_root_dir=configs.default_root_dir,
+        gpus=1,
     )
     trainer.fit(model)
