@@ -1,6 +1,7 @@
 from argparse import ArgumentParser, Namespace
 import safitty
 from typing import List, Tuple, Union
+import os
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -15,9 +16,10 @@ from metrics import eval_from_scores
 
 def prepare_infer_dataloader(args: Namespace) -> DataLoader:
     transforms = get_test_augmentations(args.image_size)
-    df = pd.read_csv(args.infer_df)
+    total_files = [args.root+x for x in os.listdir(args.root)]
+
     dataset = Dataset(
-        df, args.root, transforms, args.face_detector, args.with_labels
+        total_files, args.root, transforms, args.with_labels, real_word='real'
     )
     dataloader = DataLoader(
         dataset,

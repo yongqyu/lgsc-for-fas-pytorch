@@ -63,7 +63,7 @@ class Dataset(torch.utils.data.Dataset):
         if self.anti_word != None:
             target = 1 if self.anti_word in full_path else 0
         elif self.real_word != None:
-            target = 0 if self.rea_word in full_path else 1
+            target = 0 if self.real_word in full_path else 1
 
         image = self.transforms(image=np.array(image))["image"]
 
