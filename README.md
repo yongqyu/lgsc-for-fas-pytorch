@@ -1,4 +1,4 @@
-# LGSC-for-FAS pytorch
+# LGSC-for-FAS tensorflow
 ## WORK IN PROGRESS
 
 This repository is reimplementation of ["LGSC-for-FAS"](https://github.com/VIS-VAR/LGSC-for-FAS) repository, which is implementation
