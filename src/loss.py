@@ -1,5 +1,5 @@
-import torch
-from torch import nn
+import tensorflow as tf
+import tensorflow.keras as K
 
 
 # source code from: https://github.com/Yuol96/pytorch-triplet-loss
@@ -21,9 +21,9 @@ def pairwise_distances(embeddings, squared=False):
 
     if not squared:
         epsilon = 1e-16
-        mask = torch.eq(distances, 0).float()
+        mask = tf.math.equal(distances, 0).float()
         distances += mask * epsilon
-        distances = torch.sqrt(distances)
+        distances = tf.math.sqrt(distances)
         distances *= 1 - mask
 
     return distances
@@ -36,14 +36,14 @@ def get_valid_triplets_mask(labels):
         - a,p,n are distinct embeddings
         - a and p have the same label, while a and n have different label
     """
-    indices_equal = torch.eye(labels.size(0)).bool().cuda()
+    indices_equal = tf.eye(labels.size(0)).bool().cuda()
     indices_not_equal = ~indices_equal
     i_ne_j = indices_not_equal.unsqueeze(2)
     i_ne_k = indices_not_equal.unsqueeze(1)
     j_ne_k = indices_not_equal.unsqueeze(0)
     distinct_indices = i_ne_j & i_ne_k & j_ne_k
 
-    label_equal = torch.eq(labels.unsqueeze(1), labels.unsqueeze(0)).cuda()
+    label_equal = tf.math.equal(labels.unsqueeze(1), labels.unsqueeze(0)).cuda()
     i_eq_j = label_equal.unsqueeze(2)
     i_eq_k = label_equal.unsqueeze(1)
     i_ne_k = ~i_eq_k
@@ -84,7 +84,7 @@ def batch_all_triplet_loss(labels, embeddings, margin, squared=False):
     return triplet_loss, fraction_positive_triplets
 
 
-class TripletLoss(nn.Module):
+class TripletLoss(K.Model):
     """Triplet Loss
 
     arXiv: https://arxiv.org/pdf/1703.07737.pdf

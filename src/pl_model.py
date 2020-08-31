@@ -4,22 +4,22 @@ import numpy as np
 
 from sklearn import metrics
 
-import torch
-from torch import nn
-from torch.nn import functional as F
+import tensorflow as tf
+import tensorflow.keras as K
+import tensorflow.keras.layers as layers
 
-from catalyst.data.sampler import BalanceClassSampler
-from catalyst.contrib.nn.criterion.focal import FocalLossMultiClass
-import pytorch_lightning as pl
+# from catalyst.data.sampler import BalanceClassSampler
+# from catalyst.contrib.nn.criterion.focal import FocalLossMultiClass
+# import pytorch_lightning as pl
 
-from datasets import Dataset, get_test_augmentations, get_train_augmentations
+from datasets import load_dataset, get_test_augmentations, get_train_augmentations
 from models.scan import SCAN
 from loss import TripletLoss
 from metrics import eval_from_scores
 from utils import GridMaker
 
 
-class LightningModel(pl.LightningModule):
+class LightningModel(K.Model):
     def __init__(self, hparams):
         super().__init__()
         self.hparams = hparams
@@ -28,9 +28,9 @@ class LightningModel(pl.LightningModule):
         self.log_cues = not self.hparams.cue_log_every == 0
         self.grid_maker = GridMaker()
         if self.hparams.use_focal_loss:
-            self.clf_criterion = FocalLossMultiClass()
+            self.clf_criterion = tfa.losses.SigmoidFocalCrossEntropy()
         else:
-            self.clf_criterion = nn.CrossEntropyLoss()
+            self.clf_criterion = K.losses.SparseCategoricalCrossentropy()
 
     def forward(self, x):
         return self.model(x)
@@ -48,16 +48,16 @@ class LightningModel(pl.LightningModule):
         cue = outs[-1]
         cue = target.reshape(-1, 1, 1, 1) * cue
         num_reg = (
-            torch.sum(target) * cue.shape[1] * cue.shape[2] * cue.shape[3]
-        ).type(torch.float)
+            tf.math.reduce_sum(target) * cue.shape[1] * cue.shape[2] * cue.shape[3]
+        ).type(tf.float32)
         reg_loss = (
-            torch.sum(torch.abs(cue)) / (num_reg + 1e-9)
+            tf.math.reduce_sum(tf.math.abs(cue)) / (num_reg + 1e-9)
         ) * self.hparams.loss_coef["reg_loss"]
 
         trip_loss = 0
         bs = outs[-1].shape[0]
         for feat in outs[:-1]:
-            feat = F.adaptive_avg_pool2d(feat, [1, 1]).view(bs, -1)
+            feat = tf.nn.avg_pool2d(feat, [1, 1]).reshape(bs, -1)
             trip_loss += (
                 self.triplet_loss(feat, target)
                 * self.hparams.loss_coef["trip_loss"]
@@ -66,7 +66,7 @@ class LightningModel(pl.LightningModule):
 
         return total_loss
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch):
         input_ = batch[0]
         target = batch[1]
         outs, clf_out = self(input_)
@@ -76,7 +76,7 @@ class LightningModel(pl.LightningModule):
         return {"loss": loss, "log": tensorboard_logs}
 
     def training_epoch_end(self, outputs):
-        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
+        avg_loss = tf.stack([x["loss"] for x in outputs]).mean()
         tensorboard_logs = {
             "train_avg_loss": avg_loss,
         }
@@ -109,7 +109,7 @@ class LightningModel(pl.LightningModule):
         return val_dict
 
     def validation_epoch_end(self, outputs):
-        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        avg_loss = tf.stack([x["val_loss"] for x in outputs]).mean()
         targets = np.hstack([output["target"] for output in outputs])
         scores = np.vstack([output["score"] for output in outputs])[:, 1]
         metrics_, best_thr, acc = eval_from_scores(scores, targets)
@@ -127,46 +127,37 @@ class LightningModel(pl.LightningModule):
         return {"val_loss": avg_loss, "log": tensorboard_logs}
 
     def configure_optimizers(self):
-        optim = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optim, milestones=self.hparams.milestones, gamma=self.hparams.gamma
+        scheduler = K.optimizers.schedules.ExponentialDecay(
+            initial_learning_rate=self.hparams.lr, decay_steps=self.hparams.milestones, decay_rate=self.hparams.gamma
         )
-        return [optim], [scheduler]
+        optim = K.optimizers.Adam(scheduler)
+        return optim
 
     def train_dataloader(self):
         transforms = get_train_augmentations(self.hparams.image_size)
-        total_frames = [self.hparams.train_root+sub_dir+'/'+x
-                                           for sub_dir in os.listdir(self.hparams.train_root)
-                                           for x in os.listdir(self.hparams.train_root+sub_dir)]
-        dataset = Dataset(
-            total_frames, self.hparams.train_root, transforms, anti_word='anti'
+        # total_frames = [self.hparams.train_root+sub_dir+'/'+x
+        #                                    for sub_dir in os.listdir(self.hparams.train_root)
+        #                                    for x in os.listdir(self.hparams.train_root+sub_dir)]
+        total_frames = [self.hparams.train_root+x
+                                           for x in os.listdir(self.hparams.train_root)]
+        dataset = load_dataset(
+            total_frames, self.hparams.train_root, transforms, batch_size=self.hparams.batch_size, anti_word='anti'
         )
-        if self.hparams.use_balance_sampler:
-            labels = list(df.target.values)
-            sampler = BalanceClassSampler(labels, mode="upsampling")
-            shuffle = False
-        else:
-            sampler = None
-            shuffle = True
-        dataloader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=self.hparams.batch_size,
-            num_workers=self.hparams.num_workers_train,
-            sampler=sampler,
-            shuffle=shuffle,
-        )
-        return dataloader
+        # if self.hparams.use_balance_sampler:
+        #     labels = list(df.target.values)
+        #     sampler = BalanceClassSampler(labels, mode="upsampling")
+        #     shuffle = False
+        # else:
+        sampler = None
+        shuffle = True
+
+        # if shuffle: dataset = dataset.shuffle(dataset.shape())
+        return dataset
 
     def val_dataloader(self):
         transforms = get_test_augmentations(self.hparams.image_size)
         total_frames = [self.hparams.val_root+x for x in os.listdir(self.hparams.val_root)]
-        dataset = Dataset(
-            total_frames, self.hparams.val_root, transforms, anti_word='spoof'
+        dataset = load_dataset(
+            total_frames, self.hparams.val_root, transforms, batch_size=self.hparams.batch_size, anti_word='spoof'
         )
-        dataloader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=self.hparams.batch_size,
-            num_workers=self.hparams.num_workers_val,
-            shuffle=True,
-        )
-        return dataloader
+        return dataset

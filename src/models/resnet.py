@@ -1,6 +1,9 @@
-import torch
-from torch import nn
-from torchvision import models
+import tensorflow as tf
+import tensorflow.keras as K
+import tensorflow.keras.layers as layers
+import tensorflow_addons as tfa
+
+from classification_models.tfkeras import Classifiers
 
 from typing import List
 
@@ -10,26 +13,25 @@ from typing import List
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(
-        in_planes,
+    return layers.Conv2D(
         out_planes,
         kernel_size=3,
-        stride=stride,
-        padding=dilation,
+        strides=stride,
+        padding='same',
         groups=groups,
-        bias=False,
-        dilation=dilation,
+        use_bias=False,
+        dilation_rate=dilation,
     )
 
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
-    return nn.Conv2d(
-        in_planes, out_planes, kernel_size=1, stride=stride, bias=False
+    return layers.Conv2D(
+        out_planes, kernel_size=1, strides=stride, use_bias=False
     )
 
 
-class BasicBlock(nn.Module):
+class BasicBlock(K.Model):
     expansion = 1
 
     def __init__(
@@ -45,7 +47,7 @@ class BasicBlock(nn.Module):
     ):
         super(BasicBlock, self).__init__()
         if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
+            norm_layer = layers.BatchNormalization
         if groups != 1 or base_width != 64:
             raise ValueError(
                 "BasicBlock only supports groups=1 and base_width=64"
@@ -56,14 +58,14 @@ class BasicBlock(nn.Module):
             )
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer(planes)
-        self.relu = nn.ReLU(inplace=True)
+        self.bn1 = norm_layer() # planes)
+        self.relu = layers.ReLU() # inplace=True)
         self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer(planes)
+        self.bn2 = norm_layer() # planes)
         self.downsample = downsample
         self.stride = stride
 
-    def forward(self, x):
+    def call(self, x):
         identity = x
 
         out = self.conv1(x)
@@ -86,14 +88,13 @@ def make_layer(
     block, inplanes, planes, blocks, stride=1, dilation=1, norm_layer=None
 ):
     if norm_layer is None:
-        norm_layer = nn.BatchNorm2d
+        norm_layer = layers.BatchNormalization
 
-    downsample = None
     if stride != 1 or inplanes != planes * block.expansion:
-        downsample = nn.Sequential(
+        downsample = K.Sequential([
             conv1x1(inplanes, planes * block.expansion, stride),
-            norm_layer(planes * block.expansion),
-        )
+            norm_layer(), # planes * block.expansion),
+        ])
 
     layers = []
     layers.append(
@@ -122,25 +123,25 @@ def make_layer(
             )
         )
 
-    return nn.Sequential(*layers)
+    return K.Sequential(*layers)
 
 
-class ResNet18Encoder(nn.Module):
+class ResNet18Encoder(K.Model):
     def __init__(
         self, out_indices: List[int] = (1, 2, 3, 4), pretrained: bool = True
     ):
         super().__init__()
-        self.resnet18 = models.resnet18(pretrained=pretrained)
+        ResNet18, preprocess_input = Classifiers.get('resnet18')
+        self.resnet18 = ResNet18((224,224,3), weights='imagenet')
         self.resnet18.fc = None
         self.out_indices = out_indices
 
         self._freeze_encoder()
 
     def _freeze_encoder(self):
-        for p in self.resnet18.parameters():
-            p.requires_grad = False
+        self.resnet18.trainable = False
 
-    def forward(self, input):
+    def call(self, input):
         outs = []
         x = self.resnet18.conv1(input)
         x = self.resnet18.bn1(x)
@@ -163,7 +164,7 @@ class ResNet18Encoder(nn.Module):
         return outs
 
 
-class ResNet18Classifier(nn.Module):
+class ResNet18Classifier(K.Model):
     def __init__(
         self,
         num_classes: int = 2,
@@ -171,20 +172,20 @@ class ResNet18Classifier(nn.Module):
         dropout: float = 0.5,
     ):
         super().__init__()
-        self.resnet18 = models.resnet18(pretrained=pretrained)
-        self.resnet18.fc = nn.Linear(
-            in_features=self.resnet18.fc.in_features, out_features=num_classes
+        ResNet18, preprocess_input = Classifiers.get('resnet18')
+        self.resnet18 = ResNet18((224,224,3), weights='imagenet')
+        self.resnet18.fc = layers.Dense(
+            # in_features=self.resnet18.fc.in_features,
+            units=num_classes
         )
-        self.drop = nn.Dropout(dropout)
+        self.drop = layers.Dropout(dropout)
         self._freeze_clf()
 
     def _freeze_clf(self):
-        for p in self.resnet18.parameters():
-            p.requires_grad = False
-        for p in self.resnet18.fc.parameters():
-            p.requires_grad = True
+        self.resnet18.trainable = False
+        self.resnet18.fc.trainable = True
 
-    def forward(self, input):
+    def call(self, input):
         x = self.resnet18.conv1(input)
         x = self.resnet18.bn1(x)
         x = self.resnet18.relu(x)
@@ -195,7 +196,7 @@ class ResNet18Classifier(nn.Module):
         x = self.resnet18.layer3(x)
         x = self.resnet18.layer4(x)
         x = self.resnet18.avgpool(x)
-        x = torch.flatten(x, 1)
+        x = layers.flatten()(x)
         x = self.drop(x)
         x = self.resnet18.fc(x)
         return x

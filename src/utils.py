@@ -1,5 +1,9 @@
-from torchvision.utils import make_grid
+import tensorflow as tf
 
+def make_grid(x):
+    t = tf.unstack(x, axis=0)
+    image = tf.concat(t, axis=0)
+    return image
 
 class GridMaker:
     def __init__(self):

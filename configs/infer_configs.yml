@@ -20,5 +20,5 @@ batch_size: 16  # batch size for infer dataloader
 #  factor: 0.709
 #  device: *device
 
-root: '/data/project/rw/kakaopay/preprocess/kp_test_sample_crop/'  # prefix path to your images
+root: '/data/project/rw/oulu/preprocessed/Test_depth/all_frame_sep/image/'  # prefix path to your images
 out_file: 'result.txt'  # path to file you want save your results

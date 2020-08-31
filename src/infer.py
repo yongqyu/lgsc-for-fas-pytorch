@@ -16,10 +16,11 @@ from metrics import eval_from_scores
 
 def prepare_infer_dataloader(args: Namespace) -> DataLoader:
     transforms = get_test_augmentations(args.image_size)
-    total_files = [args.root+x for x in os.listdir(args.root)]
+    total_files = [args.root+sub_path+'/'+x for sub_path in os.listdir(args.root)
+                                            for x in os.listdir(args.root+sub_path)]
 
     dataset = Dataset(
-        total_files, args.root, transforms, args.with_labels, real_word='real'
+        total_files, args.root, transforms, args.with_labels#, real_word='real'
     )
     dataloader = DataLoader(
         dataset,
