@@ -92,22 +92,20 @@ class LightningModel(K.Model):
         loss = self.calc_losses(outs, clf_out, target)
         val_dict = {
             "val_loss": loss,
-            "score": clf_out.cpu().numpy(),
-            "target": target.cpu().numpy(),
+            "score": tf.identity(clf_out).numpy(),
+            "target": tf.identity(target).numpy(),
         }
         if self.log_cues:
-            if (
-                self.current_epoch * batch_idx
-            ) % self.hparams.cue_log_every == 0:
+            if batch_idx % self.hparams.cue_log_every == 0:
                 cues_grid, images_grid = self.grid_maker(
-                    input_.detach().cpu()[:6], outs[-1][:6]
+                    tf.identity(input_)[:6], outs[-1][:6]
                 )
-                self.logger.experiment.add_image(
-                    "cues", cues_grid, self.current_epoch * batch_idx
-                )
-                self.logger.experiment.add_image(
-                    "images", images_grid, self.current_epoch * batch_idx
-                )
+                #self.logger.experiment.add_image(
+                #    "cues", cues_grid, batch_idx
+                #)
+                #self.logger.experiment.add_image(
+                #    "images", images_grid, batch_idx
+                #)
 
         return val_dict
 

@@ -30,8 +30,8 @@ if __name__ == "__main__":
 
             if batch_idx % configs.cue_log_every == 0:
                 val_outputs = []
-                for val_batch_idx, val_batch in enumerate(1, val_dataloader):
-                    val_outputs.append(model.validation_step(val_batch))
+                for val_batch_idx, val_batch in enumerate(val_dataloader, 1):
+                    val_outputs.append(model.validation_step(val_batch, epoch * val_batch_idx))
                 val_tb_log = model.validation_epoch_end(val_outputs)
                 print(val_tb_log['log'])
 
