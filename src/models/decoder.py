@@ -55,7 +55,7 @@ class Decoder(K.Model):
         # self.conv2x2: nn.ModuleList = nn.ModuleList(self.conv2x2)
         # self.conv1x1: nn.ModuleList = nn.ModuleList(self.conv1x1)
 
-    def forward(self, inputs):
+    def call(self, inputs):
         assert len(inputs) == len(self.in_channels)
 
         outs = []
@@ -64,12 +64,17 @@ class Decoder(K.Model):
 
         for i in range(self.num_ins):
             out = layers.UpSampling2D(size=2, interpolation="nearest")(out)
-            out = tf.pad(out, [0, 1, 0, 1])
+            # print('a', out.shape)
+            out = tf.pad(out, tf.constant([[0, 0], [0, 1], [0, 1], [0, 0]]))
+            # print('b', out.shape)
             out = self.conv2x2[i](out)
+            # print('c', out.shape)
             if i < 4:
-                out = tf.concat([out, inputs[-i - 2]], axis=1)
+                out = tf.concat([out, inputs[-i - 2]], axis=-1)
+            # print('d', out.shape)
             identity = self.conv1x1[i](out)
             out = self.deres_layers[i](out) + identity
+            # print('e', out.shape)
             outs.append(out)
         outs[-1] = tf.math.tanh(outs[-1])
 

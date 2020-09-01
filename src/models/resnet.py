@@ -123,7 +123,7 @@ def make_layer(
             )
         )
 
-    return K.Sequential(*layers)
+    return K.Sequential([*layers])
 
 
 class ResNet18Encoder(K.Model):
@@ -132,8 +132,17 @@ class ResNet18Encoder(K.Model):
     ):
         super().__init__()
         ResNet18, preprocess_input = Classifiers.get('resnet18')
-        self.resnet18 = ResNet18((224,224,3), weights='imagenet')
-        self.resnet18.fc = None
+        resnet18 = ResNet18((224,224,3), weights='imagenet')
+        # resnet18.fc1 = None
+        # print([(i,x.name) for i,x in enumerate(resnet18.layers)]); exit()
+
+        self.resnet18 = K.Model(inputs=resnet18.layers[0].input,
+                                outputs=[resnet18.layers[5].output,
+                                         resnet18.layers[26].output,
+                                         resnet18.layers[45].output,
+                                         resnet18.layers[64].output,
+                                         resnet18.layers[83].output,
+                                         ]) # (83, 'add_7'), (84, 'bn1'), (85, 'relu1')
         self.out_indices = out_indices
 
         self._freeze_encoder()
@@ -142,25 +151,9 @@ class ResNet18Encoder(K.Model):
         self.resnet18.trainable = False
 
     def call(self, input):
-        outs = []
-        x = self.resnet18.conv1(input)
-        x = self.resnet18.bn1(x)
-        x = self.resnet18.relu(x)
-        outs.append(x)
-        x = self.resnet18.maxpool(x)
-
-        x = self.resnet18.layer1(x)
-        if 1 in self.out_indices:
-            outs.append(x)
-        x = self.resnet18.layer2(x)
-        if 2 in self.out_indices:
-            outs.append(x)
-        x = self.resnet18.layer3(x)
-        if 3 in self.out_indices:
-            outs.append(x)
-        x = self.resnet18.layer4(x)
-        if 4 in self.out_indices:
-            outs.append(x)
+        outs = self.resnet18(input)
+        outs = [outs[0]] + [outs[i] for i in self.out_indices]
+        # print(len(outs), [x.shape for x in outs])
         return outs
 
 
@@ -173,30 +166,23 @@ class ResNet18Classifier(K.Model):
     ):
         super().__init__()
         ResNet18, preprocess_input = Classifiers.get('resnet18')
-        self.resnet18 = ResNet18((224,224,3), weights='imagenet')
-        self.resnet18.fc = layers.Dense(
-            # in_features=self.resnet18.fc.in_features,
+        resnet18 = ResNet18((224,224,3), weights='imagenet')
+
+        self.resnet18 = K.Model(inputs=resnet18.layers[0].input,
+                                outputs=resnet18.get_layer('pool1').output)
+        self.drop = layers.Dropout(dropout)
+        self.fc = layers.Dense(
             units=num_classes
         )
-        self.drop = layers.Dropout(dropout)
         self._freeze_clf()
 
     def _freeze_clf(self):
         self.resnet18.trainable = False
-        self.resnet18.fc.trainable = True
+        self.fc.trainable = True
 
     def call(self, input):
-        x = self.resnet18.conv1(input)
-        x = self.resnet18.bn1(x)
-        x = self.resnet18.relu(x)
-        x = self.resnet18.maxpool(x)
-
-        x = self.resnet18.layer1(x)
-        x = self.resnet18.layer2(x)
-        x = self.resnet18.layer3(x)
-        x = self.resnet18.layer4(x)
-        x = self.resnet18.avgpool(x)
-        x = layers.flatten()(x)
+        x = self.resnet18(input)
+        x = layers.Flatten()(x)
         x = self.drop(x)
-        x = self.resnet18.fc(x)
+        x = self.fc(x)
         return x

@@ -18,7 +18,7 @@ def get_train_augmentations(image_size: int = 224):
         [
             A.CoarseDropout(20),
             A.Rotate(30),
-            A.RandomCrop(image_size, image_size, p=0.5),
+            # A.RandomCrop(image_size, image_size, p=0.5),
             A.LongestMaxSize(image_size),
             A.PadIfNeeded(image_size, image_size, 0),
             A.Normalize(),
@@ -56,21 +56,22 @@ def load_dataset(
 
     def __read_label(path):
         if anti_word != None:
-            target = 1 if anti_word in full_path else 0
+            target = 1 if anti_word in path else 0
         elif real_word != None:
-            target = 0 if real_word in full_path else 1
+            target = 0 if real_word in path else 1
         else:
-            target = 0 if int(full_path.split('.')[0].split('_')[-1]) == 1 else 1
+            target = 0 if int(path.split('.')[0].split('_')[-1]) == 1 else 1
+        return target
 
     random.shuffle(pathes)
 
     images = tf.data.Dataset.from_tensor_slices(list(map(__load_image, pathes))).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-    pathes = tf.data.Dataset.from_tensor_slices(list(map(__read_label, pathes))).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    labels = tf.data.Dataset.from_tensor_slices(list(map(__read_label, pathes))).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
     if with_labels:
         dataset = tf.data.Dataset.zip((images, labels))
     else:
         dataset = images
-    dataset = dataset.apply(tf.data.experimental.ignore_errors()).cache().batch(batch_size, drop_remainder=False)
+    dataset = dataset.apply(tf.data.experimental.ignore_errors()).cache().repeat().batch(batch_size, drop_remainder=False)
 
     return dataset

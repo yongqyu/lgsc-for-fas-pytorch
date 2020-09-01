@@ -1,7 +1,11 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+'''0 = all messages are logged (default behavior)
+1 = INFO messages are not printed
+2 = INFO and WARNING messages are not printed
+3 = INFO, WARNING, and ERROR messages are not printed'''
 from argparse import ArgumentParser, Namespace
-
 import safitty
-import pytorch_lightning as pl
 
 from pl_model import LightningModel
 
@@ -21,10 +25,10 @@ if __name__ == "__main__":
     tr_min_loss = 1.
     for epoch in range(1, configs.max_epochs):
         tr_outputs = []
-        for batch_idx, batch in enumerate(1, train_dataloader):
+        for batch_idx, batch in enumerate(train_dataloader, 1):
             tr_outputs.append(model.training_step(batch))
 
-            if batch_idx % cue_log_every == 0:
+            if batch_idx % configs.cue_log_every == 0:
                 val_outputs = []
                 for val_batch_idx, val_batch in enumerate(1, val_dataloader):
                     val_outputs.append(model.validation_step(val_batch))

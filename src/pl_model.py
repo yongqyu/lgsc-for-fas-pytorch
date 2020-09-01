@@ -8,6 +8,8 @@ import tensorflow as tf
 import tensorflow.keras as K
 import tensorflow.keras.layers as layers
 
+print(tf.__version__)
+print("GPU Available: ", tf.config.list_physical_devices('GPU'))
 # from catalyst.data.sampler import BalanceClassSampler
 # from catalyst.contrib.nn.criterion.focal import FocalLossMultiClass
 # import pytorch_lightning as pl
@@ -28,11 +30,11 @@ class LightningModel(K.Model):
         self.log_cues = not self.hparams.cue_log_every == 0
         self.grid_maker = GridMaker()
         if self.hparams.use_focal_loss:
-            self.clf_criterion = tfa.losses.SigmoidFocalCrossEntropy()
+            self.clf_criterion = tfa.losses.SigmoidFocalCrossEntropy(from_logits=True)
         else:
-            self.clf_criterion = K.losses.SparseCategoricalCrossentropy()
+            self.clf_criterion = K.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-    def forward(self, x):
+    def call(self, x):
         return self.model(x)
 
     def infer(self, x):
@@ -42,22 +44,25 @@ class LightningModel(K.Model):
     def calc_losses(self, outs, clf_out, target):
 
         clf_loss = (
-            self.clf_criterion(clf_out, target)
+            self.clf_criterion(y_true=target, y_pred=clf_out)
             * self.hparams.loss_coef["clf_loss"]
         )
         cue = outs[-1]
-        cue = target.reshape(-1, 1, 1, 1) * cue
-        num_reg = (
-            tf.math.reduce_sum(target) * cue.shape[1] * cue.shape[2] * cue.shape[3]
-        ).type(tf.float32)
+        print(target,'b')
+        target_01 = tf.where(tf.equal(1,target),tf.zeros_like(target),tf.ones_like(target))
+        print(target_01,'a')
+        target_01 = tf.cast(tf.reshape(target, [-1, 1, 1, 1]), tf.float32)
+        cue *= target_01
+        num_reg = tf.math.reduce_sum(target_01) \
+                * tf.cast(cue.shape[1] * cue.shape[2] * cue.shape[3], tf.float32)
         reg_loss = (
             tf.math.reduce_sum(tf.math.abs(cue)) / (num_reg + 1e-9)
         ) * self.hparams.loss_coef["reg_loss"]
 
         trip_loss = 0
-        bs = outs[-1].shape[0]
+        # bs = outs[-1].shape[0]
         for feat in outs[:-1]:
-            feat = tf.nn.avg_pool2d(feat, [1, 1]).reshape(bs, -1)
+            feat = layers.GlobalAveragePooling2D()(feat)#.reshape(bs, -1)
             trip_loss += (
                 self.triplet_loss(feat, target)
                 * self.hparams.loss_coef["trip_loss"]
@@ -141,7 +146,7 @@ class LightningModel(K.Model):
         total_frames = [self.hparams.train_root+x
                                            for x in os.listdir(self.hparams.train_root)]
         dataset = load_dataset(
-            total_frames, self.hparams.train_root, transforms, batch_size=self.hparams.batch_size, anti_word='anti'
+            total_frames, self.hparams.train_root, transforms, batch_size=self.hparams.batch_size #, anti_word='anti'
         )
         # if self.hparams.use_balance_sampler:
         #     labels = list(df.target.values)
