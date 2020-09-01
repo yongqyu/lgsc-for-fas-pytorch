@@ -48,9 +48,7 @@ class LightningModel(K.Model):
             * self.hparams.loss_coef["clf_loss"]
         )
         cue = outs[-1]
-        print(target,'b')
         target_01 = tf.where(tf.equal(1,target),tf.zeros_like(target),tf.ones_like(target))
-        print(target_01,'a')
         target_01 = tf.cast(tf.reshape(target, [-1, 1, 1, 1]), tf.float32)
         cue *= target_01
         num_reg = tf.math.reduce_sum(target_01) \

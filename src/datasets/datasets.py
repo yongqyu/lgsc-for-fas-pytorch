@@ -4,7 +4,6 @@ import numpy as np
 from PIL import Image
 import math
 import random
-import torch
 import tensorflow as tf
 import logging
 
