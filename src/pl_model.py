@@ -8,8 +8,6 @@ import tensorflow as tf
 import tensorflow.keras as K
 import tensorflow.keras.layers as layers
 
-print(tf.__version__)
-print("GPU Available: ", tf.config.list_physical_devices('GPU'))
 # from catalyst.data.sampler import BalanceClassSampler
 # from catalyst.contrib.nn.criterion.focal import FocalLossMultiClass
 # import pytorch_lightning as pl
@@ -27,18 +25,19 @@ class LightningModel(K.Model):
         self.hparams = hparams
         self.model = SCAN()
         self.triplet_loss = TripletLoss()
+        self.optimizer = self.configure_optimizers()
         self.log_cues = not self.hparams.cue_log_every == 0
-        self.grid_maker = GridMaker()
+        # self.grid_maker = GridMaker()
         if self.hparams.use_focal_loss:
             self.clf_criterion = tfa.losses.SigmoidFocalCrossEntropy(from_logits=True)
         else:
             self.clf_criterion = K.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-    def call(self, x):
-        return self.model(x)
+    def call(self, x, training=False):
+        return self.model(x, training)
 
     def infer(self, x):
-        outs, _ = self.model(x)
+        outs, _ = self.model(x, training=False)
         return outs[-1]
 
     def calc_losses(self, outs, clf_out, target):
@@ -58,9 +57,8 @@ class LightningModel(K.Model):
         ) * self.hparams.loss_coef["reg_loss"]
 
         trip_loss = 0
-        # bs = outs[-1].shape[0]
         for feat in outs[:-1]:
-            feat = layers.GlobalAveragePooling2D()(feat)#.reshape(bs, -1)
+            feat = layers.GlobalAveragePooling2D()(feat)
             trip_loss += (
                 self.triplet_loss(feat, target)
                 * self.hparams.loss_coef["trip_loss"]
@@ -69,48 +67,42 @@ class LightningModel(K.Model):
 
         return total_loss
 
+    @tf.function
     def training_step(self, batch):
         input_ = batch[0]
         target = batch[1]
-        outs, clf_out = self(input_)
-        loss = self.calc_losses(outs, clf_out, target)
+        with tf.GradientTape() as tape:
+            outs, clf_out = self(input_, training=True)
+            loss = self.calc_losses(outs, clf_out, target)
+        gradient = tape.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradient, self.trainable_variables))
 
         tensorboard_logs = {"train_loss": loss}
         return {"loss": loss, "log": tensorboard_logs}
 
     def training_epoch_end(self, outputs):
-        avg_loss = tf.stack([x["loss"] for x in outputs]).mean()
+        avg_loss = tf.reduce_mean(tf.stack([x["loss"] for x in outputs]))
         tensorboard_logs = {
             "train_avg_loss": avg_loss,
         }
         return {"train_avg_loss": avg_loss, "log": tensorboard_logs}
 
-    def validation_step(self, batch, batch_idx):
+    @tf.function
+    def validation_step(self, batch):
         input_ = batch[0]
         target = batch[1]
         outs, clf_out = self(input_)
         loss = self.calc_losses(outs, clf_out, target)
         val_dict = {
             "val_loss": loss,
-            "score": tf.identity(clf_out).numpy(),
-            "target": tf.identity(target).numpy(),
+            "score": tf.identity(clf_out),
+            "target": tf.identity(target),
         }
-        if self.log_cues:
-            if batch_idx % self.hparams.cue_log_every == 0:
-                cues_grid, images_grid = self.grid_maker(
-                    tf.identity(input_)[:6], outs[-1][:6]
-                )
-                #self.logger.experiment.add_image(
-                #    "cues", cues_grid, batch_idx
-                #)
-                #self.logger.experiment.add_image(
-                #    "images", images_grid, batch_idx
-                #)
 
         return val_dict
 
     def validation_epoch_end(self, outputs):
-        avg_loss = tf.stack([x["val_loss"] for x in outputs]).mean()
+        avg_loss = tf.reduce_mean(tf.stack([x["val_loss"] for x in outputs]))
         targets = np.hstack([output["target"] for output in outputs])
         scores = np.vstack([output["score"] for output in outputs])[:, 1]
         metrics_, best_thr, acc = eval_from_scores(scores, targets)
@@ -129,9 +121,12 @@ class LightningModel(K.Model):
 
     def configure_optimizers(self):
         scheduler = K.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=self.hparams.lr, decay_steps=self.hparams.milestones, decay_rate=self.hparams.gamma
+            initial_learning_rate=self.hparams.lr
+            , decay_steps=1000#self.hparams.milestones
+            , decay_rate=0.95#self.hparams.gamma
+            , staircase=True
         )
-        optim = K.optimizers.Adam(scheduler)
+        optim = K.optimizers.Adam(learning_rate=scheduler)
         return optim
 
     def train_dataloader(self):
@@ -142,7 +137,7 @@ class LightningModel(K.Model):
         total_frames = [self.hparams.train_root+x
                                            for x in os.listdir(self.hparams.train_root)]
         dataset = load_dataset(
-            total_frames, self.hparams.train_root, transforms, batch_size=self.hparams.batch_size #, anti_word='anti'
+            total_frames, self.hparams.train_root, transforms, batch_size=self.hparams.batch_size#, anti_word='fake'
         )
         # if self.hparams.use_balance_sampler:
         #     labels = list(df.target.values)
@@ -152,13 +147,12 @@ class LightningModel(K.Model):
         sampler = None
         shuffle = True
 
-        # if shuffle: dataset = dataset.shuffle(dataset.shape())
         return dataset
 
     def val_dataloader(self):
         transforms = get_test_augmentations(self.hparams.image_size)
         total_frames = [self.hparams.val_root+x for x in os.listdir(self.hparams.val_root)]
         dataset = load_dataset(
-            total_frames, self.hparams.val_root, transforms, batch_size=self.hparams.batch_size, anti_word='spoof'
+            total_frames, self.hparams.val_root, transforms, batch_size=self.hparams.batch_size#, anti_word='fake'
         )
         return dataset

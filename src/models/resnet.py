@@ -150,10 +150,9 @@ class ResNet18Encoder(K.Model):
     def _freeze_encoder(self):
         self.resnet18.trainable = False
 
-    def call(self, input):
-        outs = self.resnet18(input)
+    def call(self, input, training):
+        outs = self.resnet18(input, training)
         outs = [outs[0]] + [outs[i] for i in self.out_indices]
-        # print(len(outs), [x.shape for x in outs])
         return outs
 
 
@@ -180,9 +179,10 @@ class ResNet18Classifier(K.Model):
         self.resnet18.trainable = False
         self.fc.trainable = True
 
-    def call(self, input):
-        x = self.resnet18(input)
+    def call(self, input, training):
+        x = self.resnet18(input, training)
         x = layers.Flatten()(x)
-        x = self.drop(x)
+        if training:
+            x = self.drop(x)
         x = self.fc(x)
         return x

@@ -11,11 +11,11 @@ class SCAN(tf.keras.Model):
         self.decoder = Decoder()
         self.clf = ResNet18Classifier(dropout=dropout)
 
-    def call(self, x):
-        outs = self.backbone(x)
+    def call(self, x, training):
+        outs = self.backbone(x, training)
         outs = self.decoder(outs)
 
         s = x + outs[-1]
-        clf_out = self.clf(s)
+        clf_out = self.clf(s, training)
 
         return outs, clf_out
