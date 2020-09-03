@@ -130,29 +130,40 @@ class LightningModel(K.Model):
         return optim
 
     def train_dataloader(self):
-        transforms = get_train_augmentations(self.hparams.image_size)
-        # total_frames = [self.hparams.train_root+sub_dir+'/'+x
-        #                                    for sub_dir in os.listdir(self.hparams.train_root)
-        #                                    for x in os.listdir(self.hparams.train_root+sub_dir)]
-        total_frames = [self.hparams.train_root+x
-                                           for x in os.listdir(self.hparams.train_root)]
-        dataset = load_dataset(
-            total_frames, self.hparams.train_root, transforms, batch_size=self.hparams.batch_size#, anti_word='fake'
+        transforms = get_train_augmentations#(self.hparams.image_size)
+        tang_files = [self.hparams.train_root_tang+sub_dir+'/'+x
+                                           for sub_dir in os.listdir(self.hparams.train_root_tang)
+                                           for x in os.listdir(self.hparams.train_root_tang+sub_dir)]
+        oulu_files = [self.hparams.train_root_oulu+x
+                                           for x in os.listdir(self.hparams.train_root_oulu)]
+        tang_dataset = load_dataset(
+            tang_files, transforms, anti_word='anti'#, anti_word='fake'
         )
-        # if self.hparams.use_balance_sampler:
-        #     labels = list(df.target.values)
-        #     sampler = BalanceClassSampler(labels, mode="upsampling")
-        #     shuffle = False
-        # else:
-        sampler = None
-        shuffle = True
+        oulu_dataset = load_dataset(
+            oulu_files, transforms, #, anti_word='anti'#, anti_word='fake'
+        )
+        dataset = tang_dataset.concatenate(oulu_dataset)
+
+        dataset = dataset.shuffle(buffer_size = 1024)
+        dataset = dataset.batch(batch_size = self.hparams.batch_size, drop_remainder=False)
+        dataset = dataset.prefetch(buffer_size = tf.data.experimental.AUTOTUNE)#.cache()
 
         return dataset
 
     def val_dataloader(self):
-        transforms = get_test_augmentations(self.hparams.image_size)
-        total_frames = [self.hparams.val_root+x for x in os.listdir(self.hparams.val_root)]
-        dataset = load_dataset(
-            total_frames, self.hparams.val_root, transforms, batch_size=self.hparams.batch_size#, anti_word='fake'
+        transforms = get_test_augmentations#(self.hparams.image_size)
+        tang_files = [self.hparams.val_root_tang+x for x in os.listdir(self.hparams.val_root_tang)]
+        oulu_files = [self.hparams.val_root_oulu+x for x in os.listdir(self.hparams.val_root_oulu)]
+        tang_dataset = load_dataset(
+            tang_files, transforms, anti_word='spoof'#, anti_word='fake'
         )
+        oulu_dataset = load_dataset(
+            oulu_files, transforms, anti_word='spoof'#, anti_word='fake'
+        )
+        dataset = tang_dataset.concatenate(oulu_dataset)
+
+        dataset = dataset.shuffle(buffer_size = 1024)
+        dataset = dataset.batch(batch_size = self.hparams.batch_size, drop_remainder=False)
+        dataset = dataset.prefetch(buffer_size = tf.data.experimental.AUTOTUNE)#.cache()
+
         return dataset
