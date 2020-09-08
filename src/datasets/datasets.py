@@ -49,24 +49,23 @@ def augment(image):
 
 @tf.function
 def normalize(image):
-    image = (image - tf.reduce_min(image))/(tf.reduce_max(image) - tf.reduce_min(image))
-    image = (2 * image) - 1
+    image = (image - 127.5)/128.0
     return image
 
 @tf.function
 def get_train_augmentations(path):
     image = tf.io.read_file(path)
-    image = tf.image.decode_image(image, channels = 3, dtype = tf.float32)
+    image = tf.image.decode_image(image, channels=3, expand_animations=False)
+    image = tf.cast(image, tf.float32)
     image = augment(image)
-    image = normalize(image)
     return image
 
 @tf.function
 def get_test_augmentations(path):
     image = tf.io.read_file(path)
-    image = tf.image.decode_image(image, channels = 3, dtype = tf.float32)
+    image = tf.image.decode_image(image, channels=3, expand_animations=False)
+    image = tf.cast(image, tf.float32)
     image = tf.image.resize_with_crop_or_pad(image, 224, 224)
-    image = normalize(image)
     return image
 
 def load_dataset(
@@ -88,13 +87,13 @@ def load_dataset(
 
     # images = [*map(__load_image, pathes)]
     # images = tf.data.Dataset.from_tensor_slices(images)
-    images = tf.data.Dataset.from_tensor_slices(pathes)
+    images = tf.data.Dataset.from_tensor_slices(pathes).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
     images = images.map(transforms, num_parallel_calls = tf.data.experimental.AUTOTUNE)
 
     if with_labels:
         labels = [*map(__read_label, pathes)]
-        labels = tf.data.Dataset.from_tensor_slices(labels)
-        pathes = tf.data.Dataset.from_tensor_slices(pathes)
+        labels = tf.data.Dataset.from_tensor_slices(labels).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+        pathes = tf.data.Dataset.from_tensor_slices(pathes).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         dataset = tf.data.Dataset.zip((images, labels, pathes))
     else:
         dataset = images

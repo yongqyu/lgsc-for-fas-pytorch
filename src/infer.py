@@ -29,7 +29,7 @@ def prepare_infer_dataloader(args: Namespace) -> tf.data.Dataset:
     total_files = [args.root+x for x in os.listdir(args.root)]
 
     dataset = load_dataset(
-        total_files, args.root, transforms, args.with_labels, real_word='real'
+        total_files, transforms, real_word='real'
     )
 
     dataset = dataset.batch(batch_size = args.batch_size, drop_remainder=False)
@@ -75,7 +75,7 @@ def infer_model(
         for i in range(cues.shape[0]):
             score = tf.reduce_mean(cues[i, ...])
             scores.append(score)
-            f.write(f'{score} {labels[i]} {names[i]}\n')
+            f.write(f'{score} {int(labels[i])} {names[i]}\n')
         if with_labels:
             targets.append(labels)
     f.close()

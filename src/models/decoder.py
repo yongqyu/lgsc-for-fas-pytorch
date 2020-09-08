@@ -36,24 +36,20 @@ class Decoder(K.Model):
             out2x2 = in_channels[i] if i < 2 else int(in_channels[i] / 2)
             conv2x2 = K.Sequential([
                 layers.Conv2D(filters=out2x2, kernel_size=2),
-                tfa.layers.InstanceNormalization(), # out2x2),
+                tfa.layers.InstanceNormalization(),
                 layers.ReLU(),
             ])
             conv1x1 = K.Sequential([
                 layers.Conv2D(
-                    # in_channels=128 if i == 1 else in_channels[i],
                     filters=out_channels[-i - 1],
                     kernel_size=1,
                 ),
-                tfa.layers.InstanceNormalization(), # out_channels[-i - 1]),
+                tfa.layers.InstanceNormalization(),
             ])
             self.deres_layers.append(deres_layer)
             self.conv2x2.append(conv2x2)
             self.conv1x1.append(conv1x1)
 
-        # self.deres_layers: nn.ModuleList = nn.ModuleList(self.deres_layers)
-        # self.conv2x2: nn.ModuleList = nn.ModuleList(self.conv2x2)
-        # self.conv1x1: nn.ModuleList = nn.ModuleList(self.conv1x1)
 
     def call(self, inputs):
         assert len(inputs) == len(self.in_channels)

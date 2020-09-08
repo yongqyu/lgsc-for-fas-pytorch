@@ -20,6 +20,7 @@ if __name__ == "__main__":
     configs = Namespace(**configs)
 
     model = LightningModel(hparams=configs)
+    # model.load_weights('./oulu_logs/epoch_28.ckpt')
     optim = model.configure_optimizers()
 
     train_dataloader = model.train_dataloader()
@@ -37,6 +38,7 @@ if __name__ == "__main__":
                     val_outputs.append(model.validation_step(val_batch))
                 val_tb_log = model.validation_epoch_end(val_outputs)
                 print(val_tb_log['log'])
+                print(tr_outputs[-1])
 
                 if val_tb_log['log']['val_acer'] < val_min_acer:
                     val_min_acer = val_tb_log['log']['val_acer']

@@ -36,6 +36,7 @@ def get_valid_triplets_mask(labels):
         - a,p,n are distinct embeddings
         - a and p have the same label, while a and n have different label
     """
+    labels = 1-labels
     indices_equal = tf.cast(tf.eye(labels.shape[0]), tf.bool)
     indices_not_equal = ~indices_equal
     i_ne_j = tf.expand_dims(indices_not_equal,2)

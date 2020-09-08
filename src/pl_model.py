@@ -47,10 +47,10 @@ class LightningModel(K.Model):
             * self.hparams.loss_coef["clf_loss"]
         )
         cue = outs[-1]
-        target_01 = tf.where(tf.equal(1,target),tf.zeros_like(target),tf.ones_like(target))
-        target_01 = tf.cast(tf.reshape(target, [-1, 1, 1, 1]), tf.float32)
-        cue *= target_01
-        num_reg = tf.math.reduce_sum(target_01) \
+        target_mask = tf.where(tf.equal(1,target),tf.zeros_like(target),tf.ones_like(target))
+        target_mask = tf.cast(tf.reshape(target, [-1, 1, 1, 1]), tf.float32)
+        cue *= target_mask
+        num_reg = tf.math.reduce_sum(tf.cast(tf.equal(0,target), tf.float32)) \
                 * tf.cast(cue.shape[1] * cue.shape[2] * cue.shape[3], tf.float32)
         reg_loss = (
             tf.math.reduce_sum(tf.math.abs(cue)) / (num_reg + 1e-9)
@@ -67,7 +67,7 @@ class LightningModel(K.Model):
 
         return total_loss
 
-    @tf.function
+    # @tf.function
     def training_step(self, batch):
         input_ = batch[0]
         target = batch[1]
@@ -122,7 +122,7 @@ class LightningModel(K.Model):
     def configure_optimizers(self):
         scheduler = K.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=self.hparams.lr
-            , decay_steps=1000#self.hparams.milestones
+            , decay_steps=5000#self.hparams.milestones
             , decay_rate=0.95#self.hparams.gamma
             , staircase=True
         )
@@ -144,26 +144,24 @@ class LightningModel(K.Model):
         )
         dataset = tang_dataset.concatenate(oulu_dataset)
 
-        dataset = dataset.shuffle(buffer_size = 1024)
+        dataset = dataset.shuffle(buffer_size = len(tang_files)+len(oulu_files)).cache()
         dataset = dataset.batch(batch_size = self.hparams.batch_size, drop_remainder=False)
-        dataset = dataset.prefetch(buffer_size = tf.data.experimental.AUTOTUNE)#.cache()
 
         return dataset
 
     def val_dataloader(self):
-        transforms = get_test_augmentations#(self.hparams.image_size)
+        transforms = get_test_augmentations
         tang_files = [self.hparams.val_root_tang+x for x in os.listdir(self.hparams.val_root_tang)]
         oulu_files = [self.hparams.val_root_oulu+x for x in os.listdir(self.hparams.val_root_oulu)]
         tang_dataset = load_dataset(
             tang_files, transforms, anti_word='spoof'#, anti_word='fake'
         )
         oulu_dataset = load_dataset(
-            oulu_files, transforms, anti_word='spoof'#, anti_word='fake'
+            oulu_files, transforms#, anti_word='fake'
         )
         dataset = tang_dataset.concatenate(oulu_dataset)
 
-        dataset = dataset.shuffle(buffer_size = 1024)
+        dataset = dataset.shuffle(buffer_size = len(tang_files)+len(oulu_files)).cache()
         dataset = dataset.batch(batch_size = self.hparams.batch_size, drop_remainder=False)
-        dataset = dataset.prefetch(buffer_size = tf.data.experimental.AUTOTUNE)#.cache()
 
         return dataset

@@ -1,7 +1,7 @@
 device: cuda:0  # can infer using only 1 gpu
 verbose: True  # whether print statistics or not
 
-checkpoints: './oulu_logs/epoch_3.ckpt'  # path to pl checkpoint
+checkpoints: './oulu_logs/epoch_28.ckpt'  # path to pl checkpoint
 
 image_size: 224  # size of input image
 

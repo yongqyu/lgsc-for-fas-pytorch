@@ -20,11 +20,11 @@ def get_metrics(pred: ndarray, targets: ndarray):
     negative_indices = targets == 0
     positive_indices = targets == 1
 
-    false_positive = (pred[negative_indices] == 1).sum()
-    false_negative = (pred[positive_indices] == 0).sum()
+    false_negative = (pred[negative_indices] == 1).sum()
+    false_positive = (pred[positive_indices] == 0).sum()
 
-    true_positive = (pred[positive_indices] == 1).sum()
-    true_negative = (pred[negative_indices] == 0).sum()
+    true_negative = (pred[positive_indices] == 1).sum()
+    true_positive = (pred[negative_indices] == 0).sum()
 
     npcer = get_npcer(false_negative, true_positive)
     apcer = get_apcer(false_positive, true_negative)
@@ -34,7 +34,7 @@ def get_metrics(pred: ndarray, targets: ndarray):
     return acer, apcer, npcer
 
 
-def get_threshold(probs: ndarray, grid_density: int = 10):
+def get_threshold(probs: ndarray, grid_density: int = 100):
     min_, max_ = min(probs), max(probs)
     thresholds = [min_]
     for i in range(grid_density + 1):

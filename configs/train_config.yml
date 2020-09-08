@@ -15,7 +15,7 @@ milestones:  # MultiStepLR scheduler params
 gamma: 0.3
 
 image_size: 224  # size of input image
-cue_log_every: 100  # will log cues every cue_log_every batches. If 0, than won't log
+cue_log_every: 1000  # will log cues every cue_log_every batches. If 0, than won't log
 
 # uncomment this, to use online face cropping
 # however it is not recommended
@@ -32,15 +32,15 @@ train_root_tang: '/data/project/rw/datatang_sample/preprocess/'  # prefix path t
 val_root_tang: '/data/project/rw/datatang_sample/tang_test_sample/'  # path to validation csv file
 # train_root: '/data/private/FF/V2/train/'
 # val_root: '/data/private/FF/V2/valid/'
-train_root_oulu: '/data/project/rw/oulu/preprocessed/Train_depth/crop/image/'
-val_root_oulu: '/data/project/rw/oulu/preprocessed/Dev_depth/crop/image/'
+train_root_oulu: '/data/project/rw/oulu/preprocessed/Train_depth/full/image/'
+val_root_oulu: '/data/project/rw/oulu/preprocessed/Dev_depth/full/image/'
 
-batch_size: 96  # batch size for both validation and train dataloader
+batch_size: 32 # 96  # batch size for both validation and train dataloader
 num_workers_train: 3  # param for training dataloader
 num_workers_val: 3  # param for validation dataloader
 
 default_root_dir: null  # path to save pytorch_lightning logs
-max_epochs: 15  # max number of epochs to train (if doesn't achieved early stopping)
+max_epochs: 100  # max number of epochs to train (if doesn't achieved early stopping)
 
 use_balance_sampler: False  # You can try overcome class disbalance using balance sampler
 use_focal_loss: False  # You can try use focal loss instead of cross-entropy loss

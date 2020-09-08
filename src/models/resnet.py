@@ -11,7 +11,7 @@ from typing import List
 # https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 
 
-def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
+def conv3x3(out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
     return layers.Conv2D(
         out_planes,
@@ -24,7 +24,7 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     )
 
 
-def conv1x1(in_planes, out_planes, stride=1):
+def conv1x1(out_planes, stride=1):
     """1x1 convolution"""
     return layers.Conv2D(
         out_planes, kernel_size=1, strides=stride, use_bias=False
@@ -57,11 +57,11 @@ class BasicBlock(K.Model):
                 "Dilation > 1 not supported in BasicBlock"
             )
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = norm_layer() # planes)
-        self.relu = layers.ReLU() # inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = norm_layer() # planes)
+        self.conv1 = conv3x3(planes, stride)
+        self.bn1 = norm_layer()
+        self.relu = layers.ReLU()
+        self.conv2 = conv3x3(planes)
+        self.bn2 = norm_layer()
         self.downsample = downsample
         self.stride = stride
 
@@ -92,7 +92,7 @@ def make_layer(
 
     if stride != 1 or inplanes != planes * block.expansion:
         downsample = K.Sequential([
-            conv1x1(inplanes, planes * block.expansion, stride),
+            conv1x1(planes * block.expansion, stride),
             norm_layer(), # planes * block.expansion),
         ])
 
@@ -136,13 +136,13 @@ class ResNet18Encoder(K.Model):
         # resnet18.fc1 = None
         # print([(i,x.name) for i,x in enumerate(resnet18.layers)]); exit()
 
-        self.resnet18 = K.Model(inputs=resnet18.layers[0].input,
-                                outputs=[resnet18.layers[5].output,
-                                         resnet18.layers[26].output,
-                                         resnet18.layers[45].output,
-                                         resnet18.layers[64].output,
-                                         resnet18.layers[83].output,
-                                         ]) # (83, 'add_7'), (84, 'bn1'), (85, 'relu1')
+        self.resnet18 = K.Model(inputs=resnet18.get_layer('data').input,
+                                outputs=[resnet18.get_layer('relu0').output,
+                                         resnet18.get_layer('stage2_unit1_relu1').output,
+                                         resnet18.get_layer('stage3_unit1_relu1').output,
+                                         resnet18.get_layer('stage4_unit1_relu1').output,
+                                         resnet18.get_layer('relu1').output,
+                                         ])
         self.out_indices = out_indices
 
         self._freeze_encoder()
@@ -167,7 +167,7 @@ class ResNet18Classifier(K.Model):
         ResNet18, preprocess_input = Classifiers.get('resnet18')
         resnet18 = ResNet18((224,224,3), weights='imagenet')
 
-        self.resnet18 = K.Model(inputs=resnet18.layers[0].input,
+        self.resnet18 = K.Model(inputs=resnet18.get_layer('data').input,
                                 outputs=resnet18.get_layer('pool1').output)
         self.drop = layers.Dropout(dropout)
         self.fc = layers.Dense(
