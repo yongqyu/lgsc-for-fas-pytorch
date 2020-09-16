@@ -11,7 +11,7 @@ def pairwise_distances(embeddings, squared=False):
     dot_product = tf.linalg.matmul(embeddings, embeddings, transpose_b=True)
 
     # a vector
-    square_sum = tf.linalg.diag(dot_product)
+    square_sum = tf.linalg.diag_part(dot_product)
 
     distances = (
         tf.expand_dims(square_sum, 1) - 2 * dot_product + tf.expand_dims(square_sum, 0)

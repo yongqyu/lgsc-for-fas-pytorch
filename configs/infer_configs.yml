@@ -1,7 +1,7 @@
 device: cuda:0  # can infer using only 1 gpu
 verbose: True  # whether print statistics or not
 
-checkpoints: './oulu_logs/epoch_28.ckpt'  # path to pl checkpoint
+checkpoints: './oulu_logs/epoch_7.ckpt'  # path to pl checkpoint
 
 image_size: 224  # size of input image
 
@@ -19,7 +19,7 @@ batch_size: 16  # batch size for infer dataloader
 #  thresholds: [0.6, 0.7, 0.7]
 #  factor: 0.709
 #  device: *device
-lr: 0.0005  # optimizer lr
+lr: 0.000  # optimizer lr
 cue_log_every: 100  # will log cues every cue_log_every batches. If 0, than won't log
 use_focal_loss: False  # You can try use focal loss instead of cross-entropy loss
 

@@ -7,6 +7,21 @@ from classification_models.tfkeras import Classifiers
 
 from typing import List
 
+class BatchNormalization(tf.keras.layers.BatchNormalization):
+    """
+    Replace BatchNormalization layers with this new layer.
+    This layer has fixed momentum 0.9.
+    """
+    def __init__(self, momentum=0.9, name=None, **kwargs):
+        super(BatchNormalization, self).__init__(momentum=0.9, name=name, **kwargs)
+
+    def call(self, inputs, training=None):
+        return super().call(inputs=inputs, training=training)
+
+    def get_config(self):
+        config = super(BatchNormalization, self).get_config()
+        return config
+tf.keras.layers.BatchNormalization = BatchNormalization
 
 # https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 
@@ -131,18 +146,16 @@ class ResNet18Encoder(K.Model):
         self, out_indices: List[int] = (1, 2, 3, 4), pretrained: bool = True
     ):
         super().__init__()
-        ResNet18, preprocess_input = Classifiers.get('resnet18')
-        resnet18 = ResNet18((224,224,3), weights='imagenet')
-        # resnet18.fc1 = None
-        # print([(i,x.name) for i,x in enumerate(resnet18.layers)]); exit()
+        resnet18 = K.models.load_model('/data/project/rw/ASDG/tf_ssdg/tf_resnet18')
 
-        self.resnet18 = K.Model(inputs=resnet18.get_layer('data').input,
-                                outputs=[resnet18.get_layer('relu0').output,
-                                         resnet18.get_layer('stage2_unit1_relu1').output,
-                                         resnet18.get_layer('stage3_unit1_relu1').output,
-                                         resnet18.get_layer('stage4_unit1_relu1').output,
-                                         resnet18.get_layer('relu1').output,
-                                         ])
+        self.resnet18 = K.models.Model(inputs=resnet18.input,
+                                       outputs=[resnet18.get_layer('relu').output,
+                                                resnet18.get_layer('activation_3').output,
+                                                resnet18.get_layer('activation_7').output,
+                                                resnet18.get_layer('activation_11').output,
+                                                resnet18.get_layer('activation_15').output
+                                                ])
+
         self.out_indices = out_indices
 
         self._freeze_encoder()
@@ -168,13 +181,14 @@ class ResNet18Classifier(K.Model):
     ):
         super().__init__()
         ResNet18, preprocess_input = Classifiers.get('resnet18')
-        resnet18 = ResNet18((224,224,3), weights='imagenet')
+        resnet18 = K.models.load_model('/data/project/rw/ASDG/tf_ssdg/tf_resnet18')
 
-        self.resnet18 = K.Model(inputs=resnet18.get_layer('data').input,
-                                outputs=resnet18.get_layer('pool1').output)
+        self.resnet18 = K.models.Model(inputs=resnet18.input,
+                                       outputs=resnet18.get_layer('avgpool').output)
         self.drop = layers.Dropout(dropout)
         self.fc = layers.Dense(
-            units=num_classes
+            units=num_classes,
+            # activation='softmax'
         )
         self._freeze_clf()
 

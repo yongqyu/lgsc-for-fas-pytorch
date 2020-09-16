@@ -17,14 +17,14 @@ def get_acer(apcer: float, npcer: float):
 
 
 def get_metrics(pred: ndarray, targets: ndarray):
-    negative_indices = targets == 0
-    positive_indices = targets == 1
+    negative_indices = targets == 1
+    positive_indices = targets == 0
 
-    false_negative = (pred[negative_indices] == 1).sum()
-    false_positive = (pred[positive_indices] == 0).sum()
+    true_negative = (pred[negative_indices] == 1).sum()
+    true_positive = (pred[positive_indices] == 0).sum()
 
-    true_negative = (pred[positive_indices] == 1).sum()
-    true_positive = (pred[negative_indices] == 0).sum()
+    false_negative = (pred[positive_indices] == 1).sum()
+    false_positive = (pred[negative_indices] == 0).sum()
 
     npcer = get_npcer(false_negative, true_positive)
     apcer = get_apcer(false_positive, true_negative)
@@ -45,11 +45,12 @@ def get_threshold(probs: ndarray, grid_density: int = 100):
 
 def eval_from_scores(scores: ndarray, targets: ndarray):
     thrs = get_threshold(scores)
-    acc = 0.0
+    best_acc = 0.0
     best_thr = -1
     for thr in thrs:
-        acc_new = accuracy_score(targets, scores >= thr)
-        if acc_new > acc:
+        acc = accuracy_score(targets, scores >= thr)
+        if best_acc < acc:
+            best_acc = acc
             best_thr = thr
-            acc = acc_new
-    return get_metrics(scores >= best_thr, targets), best_thr, acc
+            metrics = get_metrics(scores >= thr, targets)
+    return metrics, best_thr, best_acc

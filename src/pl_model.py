@@ -38,8 +38,8 @@ class LightningModel(K.Model):
         return self.model(x, training)
 
     def infer(self, x):
-        outs, _ = self.model(x, training=False)
-        return outs[-1]
+        outs, clf_out = self.model(x, training=False)
+        return clf_out[:,1]
 
     def calc_losses(self, outs, clf_out, target):
 
@@ -49,7 +49,7 @@ class LightningModel(K.Model):
         )
         cue = outs[-1]
         target_mask = tf.where(tf.equal(1,target),tf.zeros_like(target),tf.ones_like(target))
-        target_mask = tf.cast(tf.reshape(target, [-1, 1, 1, 1]), tf.float32)
+        target_mask = tf.cast(tf.reshape(target_mask, [-1, 1, 1, 1]), tf.float32)
         cue *= target_mask
         num_reg = tf.math.reduce_sum(tf.cast(tf.equal(0,target), tf.float32)) \
                 * tf.cast(cue.shape[1] * cue.shape[2] * cue.shape[3], tf.float32)
@@ -68,7 +68,7 @@ class LightningModel(K.Model):
 
         return total_loss, clf_loss, reg_loss, trip_loss
 
-    @tf.function
+    # @tf.function
     def training_step(self, batch):
         input_ = batch[0]
         target = batch[1]
@@ -87,10 +87,10 @@ class LightningModel(K.Model):
         return {"loss": loss, "log": tensorboard_logs}
 
     def training_epoch_end(self, outputs):
-        avg_loss = tf.reduce_mean(tf.stack([x["loss"] for x in outputs]))
-        clf_loss = tf.reduce_mean(tf.stack([x['log']["clf_loss"] for x in outputs]))
-        reg_loss = tf.reduce_mean(tf.stack([x['log']["reg_loss"] for x in outputs]))
-        trip_loss = tf.reduce_mean(tf.stack([x['log']["trip_loss"] for x in outputs]))
+        avg_loss = tf.math.reduce_mean(tf.stack([x["loss"] for x in outputs]))
+        clf_loss = tf.math.reduce_mean(tf.stack([x['log']["clf_loss"] for x in outputs]))
+        reg_loss = tf.math.reduce_mean(tf.stack([x['log']["reg_loss"] for x in outputs]))
+        trip_loss = tf.math.reduce_mean(tf.stack([x['log']["trip_loss"] for x in outputs]))
         tensorboard_logs = {
             "train_avg_loss": avg_loss,
             "train_avg_clf_loss": clf_loss,
@@ -103,18 +103,18 @@ class LightningModel(K.Model):
     def validation_step(self, batch):
         input_ = batch[0]
         target = batch[1]
-        outs, clf_out = self(input_)
+        outs, clf_out = self(input_, training=False)
         loss, *_ = self.calc_losses(outs, clf_out, target)
         val_dict = {
             "val_loss": loss,
-            "score": tf.identity(clf_out),
-            "target": tf.identity(target),
+            "score": clf_out,
+            "target": target,
         }
 
         return val_dict
 
     def validation_epoch_end(self, outputs):
-        avg_loss = tf.reduce_mean(tf.stack([x["val_loss"] for x in outputs]))
+        avg_loss = tf.math.reduce_mean(tf.stack([x["val_loss"] for x in outputs]))
         targets = np.hstack([output["target"] for output in outputs])
         scores = np.vstack([output["score"] for output in outputs])[:, 1]
         metrics_, best_thr, acc = eval_from_scores(scores, targets)
@@ -138,29 +138,27 @@ class LightningModel(K.Model):
             , decay_rate=0.95#self.hparams.gamma
             , staircase=True
         )
-        optimizer = tfa.optimizers.RectifiedAdam(learning_rate=scheduler, warmup_proportion=0.1, min_lr=1e-6, weight_decay=0.001)
+        # optimizer = tfa.optimizers.RectifiedAdam(learning_rate=scheduler, warmup_proportion=0.1, min_lr=1e-6, weight_decay=0.01)
         # optimizer = tfa.optimizers.MovingAverage(optimizer)
-        # optimizer = K.optimizers.Adam(learning_rate=scheduler)
+        optimizer = K.optimizers.Adam(learning_rate=scheduler)
         return optimizer
 
     def train_dataloader(self):
         transforms = get_train_augmentations#(self.hparams.image_size)
-        # tang_files = [self.hparams.train_root_tang+sub_dir+'/'+x
-        #                                    for sub_dir in os.listdir(self.hparams.train_root_tang)
-        #                                    for x in os.listdir(self.hparams.train_root_tang+sub_dir)]
+        tang_files = [self.hparams.train_root_tang+sub_dir+'/'+x
+                                           for sub_dir in os.listdir(self.hparams.train_root_tang)
+                                           for x in os.listdir(self.hparams.train_root_tang+sub_dir)]
+        tang_dataset = load_dataset(
+            tang_files, transforms, anti_word='anti'
+        )
         oulu_files = [self.hparams.train_root_oulu+x
                                            for x in os.listdir(self.hparams.train_root_oulu)]
-        # tang_dataset = load_dataset(
-        #     tang_files, transforms, anti_word='anti'#, anti_word='fake'
-        # )
         oulu_dataset = load_dataset(
-            oulu_files, transforms, #, anti_word='anti'#, anti_word='fake'
+            oulu_files, transforms,
         )
-        # dataset = tang_dataset.concatenate(oulu_dataset)
-        dataset = oulu_dataset
+        dataset = tang_dataset.concatenate(oulu_dataset)
 
-        # dataset = dataset.shuffle(buffer_size = len(tang_files)+len(oulu_files)).cache()
-        dataset = dataset.shuffle(buffer_size = len(oulu_files)).cache()
+        dataset = dataset.shuffle(buffer_size = len(tang_files)+len(oulu_files)).cache()
         dataset = dataset.batch(batch_size = self.hparams.batch_size, drop_remainder=False)
 
         return dataset
@@ -168,18 +166,21 @@ class LightningModel(K.Model):
     def val_dataloader(self):
         transforms = get_test_augmentations
         # tang_files = [self.hparams.val_root_tang+x for x in os.listdir(self.hparams.val_root_tang)]
-        oulu_files = [self.hparams.val_root_oulu+x for x in os.listdir(self.hparams.val_root_oulu)]
         # tang_dataset = load_dataset(
         #     tang_files, transforms, anti_word='spoof'#, anti_word='fake'
         # )
-        oulu_dataset = load_dataset(
-            oulu_files, transforms#, anti_word='fake'
-        )
+        # oulu_files = [self.hparams.val_root_oulu+x for x in os.listdir(self.hparams.val_root_oulu)]
+        # oulu_dataset = load_dataset(
+        #     oulu_files, transforms#, anti_word='fake'
+        # )
         # dataset = tang_dataset.concatenate(oulu_dataset)
-        dataset = oulu_dataset
+        kp_files = [self.hparams.val_root_kp+x for x in os.listdir(self.hparams.val_root_kp)]
+        dataset = load_dataset(
+            kp_files, transforms, real_word='real'
+        )
 
         # dataset = dataset.shuffle(buffer_size = len(tang_files)+len(oulu_files)).cache()
-        dataset = dataset.shuffle(buffer_size = len(oulu_files)).cache()
+        dataset = dataset.shuffle(buffer_size = len(kp_files)).cache()
         dataset = dataset.batch(batch_size = self.hparams.batch_size, drop_remainder=False)
 
         return dataset

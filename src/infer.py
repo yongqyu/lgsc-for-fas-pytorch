@@ -33,7 +33,6 @@ def prepare_infer_dataloader(args: Namespace) -> tf.data.Dataset:
     )
 
     dataset = dataset.batch(batch_size = args.batch_size, drop_remainder=False)
-    dataset = dataset.prefetch(buffer_size = tf.data.experimental.AUTOTUNE)#.cache()
 
     return dataset
 
@@ -73,7 +72,7 @@ def infer_model(
         cues = model.infer(images)
 
         for i in range(cues.shape[0]):
-            score = tf.reduce_mean(cues[i, ...])
+            score = cues[i]
             scores.append(score)
             f.write(f'{score} {int(labels[i])} {names[i]}\n')
         if with_labels:

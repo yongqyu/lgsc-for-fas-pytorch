@@ -9,47 +9,24 @@ import tensorflow_addons as tfa
 import logging
 
 import albumentations as A
-# from albumentations.pytorch import ToTensorV2 as ToTensor
 
-'''
-def get_train_augmentations(image_size: int = 224):
-    return A.Compose(
-        [
-            A.CoarseDropout(20),
-            A.Rotate(30),
-            A.RandomCrop(image_size, image_size, p=0.5),
-            A.LongestMaxSize(image_size),
-            A.PadIfNeeded(image_size, image_size, 0),
-            A.Normalize(),
-            # ToTensor(),
-        ]
-    )
-
-
-def get_test_augmentations(image_size: int = 224):
-    return A.Compose(
-        [
-            A.LongestMaxSize(image_size),
-            A.PadIfNeeded(image_size, image_size, 0),
-            A.Normalize(),
-            # ToTensor(),
-        ]
-    )
-'''
 
 @tf.function
 def augment(image):
-    # image = tfa.image.rotate(image, tf.constant(np.pi/8))#tf.constant(np.random.uniform(high=0.5)))
     image = tf.image.random_crop(image, (224, 224, 3))
     image = tf.image.resize_with_crop_or_pad(image, 224, 224)
     image = tf.image.random_flip_left_right(image)
-    image = tf.image.random_saturation(image, 0.5, 2.0)
-    image = tf.image.random_brightness(image, 0.5)
+    # image = tf.image.random_saturation(image, 0.5, 2.0)
+    # image = tf.image.random_brightness(image, 0.5)
     return image
 
 @tf.function
 def normalize(image):
-    image = (image - 127.5)/128.0
+    max_pixel_value=255.0
+    image = tf.divide(image, max_pixel_value)
+    mean=[[[0.485, 0.456, 0.406]]]
+    std=[[[0.229, 0.224, 0.225]]]
+    image = tf.divide(tf.math.subtract(image, tf.constant(mean, dtype=tf.float32)), tf.constant(std, dtype=tf.float32))
     return image
 
 @tf.function
@@ -57,6 +34,7 @@ def get_train_augmentations(path):
     image = tf.io.read_file(path)
     image = tf.image.decode_image(image, channels=3, expand_animations=False)
     image = tf.cast(image, tf.float32)
+    image = normalize(image)
     image = augment(image)
     return image
 
@@ -65,6 +43,7 @@ def get_test_augmentations(path):
     image = tf.io.read_file(path)
     image = tf.image.decode_image(image, channels=3, expand_animations=False)
     image = tf.cast(image, tf.float32)
+    image = normalize(image)
     image = tf.image.resize_with_crop_or_pad(image, 224, 224)
     return image
 

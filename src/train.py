@@ -25,16 +25,17 @@ if __name__ == "__main__":
     # model.load_weights('./oulu_logs/epoch_2.ckpt')
     optim = model.configure_optimizers()
 
-    logdir = "./tb/"
+    logdir = "/data/private/ASD/tb/"
     writer = tf.summary.create_file_writer(logdir)
     writer.set_as_default()
 
     train_dataloader = model.train_dataloader()
     val_dataloader = model.val_dataloader()
+    # val_dataloader = val_dataloader.shard(num_shards=20, index=0)
     val_min_acer = 1.
     for epoch in range(1, configs.max_epochs):
         print(f'[Epoch {epoch}]')
-        if epoch == 3:
+        if epoch > 5:
             model.model.backbone.unfreeze_encoder()
             model.model.clf.unfreeze_clf()
 
