@@ -26,10 +26,10 @@ def prepare_infer_dataloader(args: Namespace) -> tf.data.Dataset:
     transforms = get_test_augmentations
     # total_files = [args.root+sub_path+'/'+x for sub_path in os.listdir(args.root)
     #                                         for x in os.listdir(args.root+sub_path)]
-    total_files = [args.root+x for x in os.listdir(args.root)]
+    total_files = [args.root+x for x in os.listdir(args.root) if 'png' in x]
 
     dataset = load_dataset(
-        total_files, transforms, real_word='real'
+        total_files, transforms#, real_word='real'
     )
 
     dataset = dataset.batch(batch_size = args.batch_size, drop_remainder=False)

@@ -37,3 +37,12 @@ def set_gmem_growth(gpus=None, yn=True):
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
             print(e)
+
+def read_label(path, anti_word=None, real_word=None):
+    if anti_word != None:
+        target = 1 if anti_word in path else 0
+    elif real_word != None:
+        target = 0 if real_word in path else 1
+    else:
+        target = 0 if int(path.split('.')[0].split('_')[-1]) == 0 else 1
+    return target
